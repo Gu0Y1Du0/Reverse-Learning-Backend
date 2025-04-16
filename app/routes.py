@@ -281,7 +281,7 @@ async def qwenview(request: ViewRequest):
         if not file.startswith("data:image/"):
             return JSONResponse(status_code=400, content={"message": "只支持图片文件！"})
         prompt = (
-            "请按照以下 JSON 格式返回结果，不要使用markdown格式："
+            "请按照以下 JSON 格式返回结果，不要使用markdown格式，需保证转化为JSON后数学符号、换行符号不影响或干扰包解析："
             "{"
             '    "题目": "识别到的完整题目，如果是选择题，需要加入选项",'
             '    "正确答案": {'
