@@ -347,22 +347,23 @@ async def qwenview(request: ViewRequest):
                     f.write(f"正确答案:\n")
                     f.write(f"- 详细解析: {detailed_explanation}\n")
                     f.write(f"- 考察知识点: {'，'.join(knowledge_points)}\n\n")
+                # 返回标准化的响应
+                return {
+                    "status": "success",
+                    "message": "图片解析成功",
+                    "response": {
+                        "题目": question,
+                        "正确答案": {
+                            "详细解析": detailed_explanation,
+                            "考察知识点": knowledge_points
+                        }
+                    }
+                }
             except json.JSONDecodeError as e:
                 raise HTTPException(status_code=500, detail=f"模型返回的内容不是有效的 JSON 格式: {str(e)}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"模型调用失败: {str(e)}")
-        # 返回标准化的响应
-        return {
-            "status": "success",
-            "message": "图片解析成功",
-            "response": {
-                "题目": question,
-                "正确答案": {
-                    "详细解析": detailed_explanation,
-                    "考察知识点": knowledge_points
-                }
-            }
-        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"拍照搜题报错: {str(e)}")
 
