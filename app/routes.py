@@ -420,8 +420,8 @@ async def get_source(request: GetsourceRequest):
                 return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
             # 错题
             case 2:
-                file_path = user_folder / f"{username}_problem_txt.txt"
-                filename = f"{username}_problem_txt.txt"
+                file_path = user_folder / f"{username}_problem_txt.md"
+                filename = f"{username}_problem_txt.md"
                 return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
             # 学习建议
             case 3:
