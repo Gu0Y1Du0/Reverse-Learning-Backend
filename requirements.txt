@@ -7,6 +7,7 @@ python-multipart
 sqlalchemy
 pandas
 openpyxl
+pymysql
 # 图像处理
 pillow
 # 密码加密
@@ -17,3 +18,4 @@ python-dotenv
 requests
 # 其他工具
 pydantic
+cryptography
