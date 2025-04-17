@@ -340,7 +340,7 @@ async def qwenview(request: ViewRequest):
                 knowledge_points = correct_answer.get("考察知识点", [])
                 # 存储题目和答案
                 date_str = datetime.now().strftime("%Y-%m-%d")
-                user_problem_txt_path = user_folder / f"{username}_problem_txt.txt"
+                user_problem_txt_path = user_folder / f"{username}_problem_txt.md"
                 with open(user_problem_txt_path, "a", encoding="utf-8") as f:
                     f.write(f"日期: {date_str}\n\n")
                     f.write(f"题目: {question}\n\n")
@@ -363,7 +363,6 @@ async def qwenview(request: ViewRequest):
                 raise HTTPException(status_code=500, detail=f"模型返回的内容不是有效的 JSON 格式: {str(e)}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"模型调用失败: {str(e)}")
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"拍照搜题报错: {str(e)}")
 
