@@ -395,12 +395,19 @@ async def deepseekadvice(request: AdviceRequest):
         # 调用AI时，将Preprompt，用户画像拼接到用户输入
         full_prompt_for_ai = f"{Preprompt}\n\n用户画像：\n{user_profile}\n\n用户输入内容:\n{prompt}"
         response_text = call_deepseek_r1_distill(full_prompt_for_ai)
-        # 写入文件（仅保存用户原始输入和 AI 回复）
+        advice_list = response_text["response"]["advice_list"]
+        # 写入文件并返回结果
         date_str = datetime.now().strftime("%Y-%m-%d")
         file_path = user_folder / f"{username}_advice.txt"
         with open(file_path, "a", encoding="utf-8") as f:
-            f.write(f"在{date_str}\n\n{username}获取学习建议：\n\n{response_text}\n\n")
-        return {"status": "success", "response": response_text}
+            f"在{date_str}\n\n{username}获取学习建议：\n\n"
+            for advice in advice_list:
+                method = advice.get("method", "")
+                schedule = advice.get("schedule", "")
+                f.write(
+                    f"方法: {method}\n\n计划: {schedule}\n\n"
+                )
+        return {"status": "success", "response": advice_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 

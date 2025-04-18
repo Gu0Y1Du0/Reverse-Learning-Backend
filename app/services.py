@@ -129,12 +129,23 @@ def call_deepseek_r1_distill(prompt: str):
         output = result.get("output", None)  # 假设 API 返回的字段名为 "output"
         if output is None:
             raise Exception("API 返回了空内容。")
-        # 提取回复内容
         choices = output.get("choices", [])
-        if choices and isinstance(choices, list):
-            return choices[0].get("message", {}).get("content", "")
-        else:
-            raise Exception("API 返回的内容格式不正确。")
+        if not isinstance(choices, list) or len(choices) == 0:
+            raise ValueError("API 返回的 choices 字段为空或格式不正确")
+        # 提取消息内容
+        message_content = choices[0].get("message", {}).get("content", "")
+        if not message_content:
+            raise ValueError("API 返回的消息内容为空")
+        # 将消息内容解析为 JSON
+        try:
+            advice_data = eval(message_content.strip("```json\n").strip("\n```"))
+        except Exception as e:
+            raise ValueError(f"解析消息内容为 JSON 失败: {str(e)}")
+        # 提取 advice 列表
+        advice_list = advice_data.get("advice", [])
+        if not isinstance(advice_list, list) or len(advice_list) == 0:
+            raise ValueError("advice 列表为空或格式不正确")
+        return {"status": "success", "response": advice_list}
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"调用 AI 失败: {str(e)}")
 
