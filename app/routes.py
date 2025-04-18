@@ -12,7 +12,7 @@ from sqlalchemy import func
 from starlette.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import sessionmaker
 from .config import ENVPATH, DATABASE_URL
-from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill
+from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill, call_deepseek_r1_distill_download
 from .models import User, ConversationScore
 from .database import engine, export_username_to_excel
 from .utils import mkdir, encode_image, extract_json_content
@@ -424,6 +424,7 @@ async def get_source(request: GetsourceRequest):
                 return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
             # 学习建议
             case 3:
+                call_deepseek_r1_distill_download(username)
                 file_path = user_folder / f"{username}_advice.txt"
                 filename = f"{username}_advice.txt"
                 return FileResponse(file_path, media_type="application/octet-stream", filename=filename)

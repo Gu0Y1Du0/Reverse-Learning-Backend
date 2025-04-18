@@ -1,7 +1,15 @@
 import base64
+from datetime import datetime
+from pathlib import Path
+
 import requests
-from .config import DASHSCOPE_API_KEY
+from click import prompt
+
+from .config import DASHSCOPE_API_KEY, ENVPATH
 from fastapi import HTTPException
+
+from .utils import mkdir
+
 
 # 调用通义千问文字 API
 def call_qwen(prompt: str, history: list):
@@ -129,3 +137,93 @@ def call_deepseek_r1_distill(prompt: str):
             raise Exception("API 返回的内容格式不正确。")
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"调用 AI 失败: {str(e)}")
+
+def call_deepseek_r1_distill_download(username: str):
+    DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    # 检查 API Key 是否设置
+    if not DASHSCOPE_API_KEY:
+        raise HTTPException(status_code=500, detail="API Key 未设置")
+    # 构造请求头
+    headers = {
+        "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    # 创建用户文件夹和用户画像文件路径
+    user_folder = Path(ENVPATH) / username
+    mkdir(user_folder)
+    user_profile_path = user_folder / f"{username}_profile.txt"
+    # 加载用户画像（如果存在）
+    user_profile = ""
+    if user_profile_path.exists():
+        with open(user_profile_path, "r", encoding="utf-8") as f:
+            user_profile = f.read()
+    else:
+        raise Exception("用户画像为空")
+    Preprompt = {
+        "advice": [
+            {
+                "method": "给出应对困难知识点的方法",
+                "schedule": "根据用户画像，在学段内，结合现实给出以后的学习计划"
+            }
+        ]
+    }
+    # 构造请求体
+    data = {
+        "model": "deepseek-r1-distill-qwen-7b",  # 指定模型名称
+        "input": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"根据用户画像，给出用户学习建议。{user_profile}"
+                               f"请按照以下 JSON 格式返回结果："
+                               f"{Preprompt}",  # 用户输入内容
+                }
+            ]
+        },
+        "parameters": {
+            "result_format": "message"# 返回结果格式
+        }
+    }
+    try:
+        # 发送 POST 请求
+        response = requests.post(DASHSCOPE_API_URL, headers=headers, json=data)
+        # 检查响应状态码
+        response.raise_for_status()
+        # 解析响应内容
+        result = response.json()
+        print("API 响应:", result)
+        output = result.get("output", None)
+        if not output or "choices" not in output:
+            raise ValueError("API 返回的 output 字段为空或格式不正确")
+        choices = output.get("choices", [])
+        if not isinstance(choices, list) or len(choices) == 0:
+            raise ValueError("API 返回的 choices 字段为空或格式不正确")
+        # 提取消息内容
+        message_content = choices[0].get("message", {}).get("content", "")
+        if not message_content:
+            raise ValueError("API 返回的消息内容为空")
+        # 将消息内容解析为 JSON
+        try:
+            advice_data = eval(message_content.strip("```json\n").strip("\n```"))
+        except Exception as e:
+            raise ValueError(f"解析消息内容为 JSON 失败: {str(e)}")
+        # 提取 advice 列表
+        advice_list = advice_data.get("advice", [])
+        if not isinstance(advice_list, list) or len(advice_list) == 0:
+            raise ValueError("advice 列表为空或格式不正确")
+        # 写入文件并返回结果
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        file_path = user_folder / f"{username}_advice.txt"
+        with open(file_path, "a", encoding="utf-8") as f:
+            f"在{date_str}\n\n{username}获取学习建议：\n\n"
+            for advice in advice_list:
+                method = advice.get("method", "")
+                schedule = advice.get("schedule", "")
+                f.write(
+                    f"方法: {method}\n\n计划: {schedule}\n\n"
+                )
+        return {"status": "success", "response": advice_list}
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"调用 AI 失败: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"解析 API 响应失败: {str(e)}")
