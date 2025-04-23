@@ -19,3 +19,10 @@ requests
 # 其他工具
 pydantic
 cryptography
+# 大模型微调
+torch
+torchvision
+transformers
+accelerate
+# 大模型依赖
+modelscope
