@@ -92,63 +92,6 @@ def call_qwen_vl(image_path: str, prompt: str, imageform: str):
         print(f"Error calling visual API: {e}")
         return None
 
-# 调用DeepseekAPI deepseek-r1-distill-qwen-7b
-def call_deepseek_r1_distill(prompt: str):
-    DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-    # 检查 API Key 是否设置
-    if not DASHSCOPE_API_KEY:
-        raise HTTPException(status_code=500, detail="API Key 未设置")
-    # 构造请求头
-    headers = {
-        "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    # 构造请求体
-    data = {
-        "model": "deepseek-r1-distill-qwen-7b",  # 指定模型名称
-        "input": {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,  # 用户输入内容
-                }
-            ]
-        },
-        "parameters": {
-            "result_format": "message"  # 返回结果格式
-        }
-    }
-
-    try:
-        # 发送 POST 请求
-        response = requests.post(DASHSCOPE_API_URL, headers=headers, json=data)
-        # 检查响应状态码
-        response.raise_for_status()
-        # 解析响应内容
-        result = response.json()
-        output = result.get("output", None)  # 假设 API 返回的字段名为 "output"
-        if output is None:
-            raise Exception("API 返回了空内容。")
-        choices = output.get("choices", [])
-        if not isinstance(choices, list) or len(choices) == 0:
-            raise ValueError("API 返回的 choices 字段为空或格式不正确")
-        # 提取消息内容
-        message_content = choices[0].get("message", {}).get("content", "")
-        if not message_content:
-            raise ValueError("API 返回的消息内容为空")
-        # 将消息内容解析为 JSON
-        try:
-            advice_data = eval(message_content.strip("```json\n").strip("\n```"))
-        except Exception as e:
-            raise ValueError(f"解析消息内容为 JSON 失败: {str(e)}")
-        # 提取 advice 列表
-        advice_list = advice_data.get("advice", [])
-        if not isinstance(advice_list, list) or len(advice_list) == 0:
-            raise ValueError("advice 列表为空或格式不正确")
-        return {"status": "success", "response": advice_list}
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"调用 AI 失败: {str(e)}")
-
 def call_deepseek_r1_distill_download(username: str):
     DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     # 检查 API Key 是否设置

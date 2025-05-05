@@ -12,7 +12,7 @@ from sqlalchemy import func
 from starlette.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import sessionmaker
 from .config import ENVPATH, DATABASE_URL
-from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill, call_deepseek_r1_distill_download
+from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill_download
 from .models import User, ConversationScore
 from .database import engine, export_username_to_excel
 from .utils import mkdir, encode_image, extract_json_content
@@ -365,51 +365,6 @@ async def qwenview(request: ViewRequest):
             raise HTTPException(status_code=500, detail=f"模型调用失败: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"拍照搜题报错: {str(e)}")
-
-# 学习建议
-@router.post("/advice")
-async def deepseekadvice(request: AdviceRequest):
-    try:
-        # 定义 Preprompt
-        Preprompt = (
-            "根据用户画像，给出用户学习建议。"
-            "格式以二级标题'学习建议开头'，正文部分写学习建议。"
-        )
-        # 获取用户印记
-        username = request.username
-        prompt = request.prompt
-        # 创建用户文件夹和用户画像文件路径
-        user_folder = Path(ENVPATH) / username
-        mkdir(user_folder)
-        user_profile_path = user_folder / f"{username}_profile.txt"
-        print(f"用户画像文件路径: {user_profile_path}")
-        # 加载用户画像
-        if not user_profile_path.exists():
-            raise HTTPException(status_code=400, detail="您还没开始使用逆向学习问答助手！")
-        with open(user_profile_path, "r", encoding="utf-8") as f:
-            user_profile = f.read().strip()  # 去除可能的空白字符
-        # 如果用户画像为空，也返回错误
-        if not user_profile:
-            raise HTTPException(status_code=400, detail="您还没开始使用逆向学习问答助手！")
-
-        # 调用AI时，将Preprompt，用户画像拼接到用户输入
-        full_prompt_for_ai = f"{Preprompt}\n\n用户画像：\n{user_profile}\n\n用户输入内容:\n{prompt}"
-        response_text = call_deepseek_r1_distill(full_prompt_for_ai)
-        advice_list = response_text["response"]["advice_list"]
-        # 写入文件并返回结果
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        file_path = user_folder / f"{username}_advice.txt"
-        with open(file_path, "a", encoding="utf-8") as f:
-            f"在{date_str}\n\n{username}获取学习建议：\n\n"
-            for advice in advice_list:
-                method = advice.get("method", "")
-                schedule = advice.get("schedule", "")
-                f.write(
-                    f"方法: {method}\n\n计划: {schedule}\n\n"
-                )
-        return {"status": "success", "response": advice_list}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
 # 资源下载
 @router.post("/source")
