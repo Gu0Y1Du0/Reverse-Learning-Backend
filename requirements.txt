@@ -1,0 +1,28 @@
+# FastAPI 和相关依赖
+fastapi
+uvicorn
+starlette
+python-multipart
+# 数据库相关
+sqlalchemy
+pandas
+openpyxl
+pymysql
+# 图像处理
+pillow
+# 密码加密
+bcrypt
+# 环境变量加载
+python-dotenv
+# HTTP 请求
+requests
+# 其他工具
+pydantic
+cryptography
+
+# 模型部署(torch, torchvision使用以下命令)
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu12x
+transformers
+optimum
+bitsandbytes
+qwen_vl_utils
