@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Union, Dict, List
+
+import bcrypt
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -310,7 +312,7 @@ def get_frequency(db_url: str, student_identifier: Union[int, str], starttime: d
         session.rollback()
         raise
 
-# 获取学生身份
+# 获取学生名
 def get_studentname(db_url: str, student_identifier: Union[int, str]) -> str:
     try:
         # 参数验证
@@ -332,7 +334,7 @@ def get_studentname(db_url: str, student_identifier: Union[int, str]) -> str:
     except SQLAlchemyError as e:
         raise RuntimeError(f"数据库查询失败: {str(e)}") from e
 
-# 获取教师身份
+# 获取教师名
 def get_teachername(db_url: str, teacher_identifier: Union[int, str]) -> str:
     try:
         # 参数验证
@@ -394,7 +396,7 @@ def join_class(db_url: str, teacher_identifier: Union[int, str], student_identif
                     return False
                 # 执行加入操作
                 # 检查学生是否已加入
-                existing_student = session.query(Class).filter(Class.teacherid == teacher.teacherid,Class.classname == classname,Student.studentid == student.studentid).first()
+                existing_student = session.query(Class).filter(Class.teacherid == teacher.teacherid, Class.classname == classname, Student.studentid == student.studentid).first()
 
                 if existing_student:
                     print(f"班级 {classname} 已存在")
@@ -417,5 +419,86 @@ def join_class(db_url: str, teacher_identifier: Union[int, str], student_identif
 
     except Exception as e:
         print(f"发生错误: {e}")
+    finally:
+        session.close()
+
+# 批量导入
+def add_in_list(db_url: str, table_name: str, list: List) -> bool:
+    try:
+        if table_name != 'Student' and table_name != 'Teacher':
+            raise ValueError("不正确传入")
+
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+        with Session() as session:
+            try:
+                if table_name == 'Student':
+                    for student in list:
+                        # 加密密码
+                        salt = bcrypt.gensalt()
+                        hashed_password = bcrypt.hashpw(student.password.encode('utf-8'), salt).decode('utf-8')
+                        new_student = Student(
+                            studentname=student.studentname,
+                            password_hash=hashed_password
+                        )
+                        session.add(new_student)
+                        session.commit()
+                else:
+                    for teacher in list:
+                        # 加密密码
+                        salt = bcrypt.gensalt()
+                        hashed_password = bcrypt.hashpw(teacher.password.encode('utf-8'), salt).decode('utf-8')
+                        new_teacher = Teacher(
+                            teachername=teacher.teachername,
+                            password_hash=hashed_password
+                        )
+                        session.add(new_teacher)
+                        session.commit()
+                return True
+            except Exception as inner_e:
+                session.rollback()  # 回滚事务
+                print(f"数据库操作失败: {inner_e}")
+    except Exception as e:
+        print(f"发生错误: {e}")
+    finally:
+        session.close()
+
+def add_student_to_class_in_list(db_url: str, teacher_identifier: Union[int, str], classname: str, list: List) -> bool:
+    try:
+        # 参数验证
+        if not classname.strip():
+            raise ValueError("班级名称不能为空")
+        if not isinstance(teacher_identifier, (int, str)):
+            raise TypeError("教师标识符类型错误")
+
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+        with Session() as session:
+            try:
+                # 验证教师权限
+                if isinstance(teacher_identifier, int):
+                    teacher = session.query(Teacher).get(teacher_identifier)
+                else:
+                    teacher = session.query(Teacher).filter(Teacher.teachername == teacher_identifier).first()
+                if not teacher:
+                    print("教师账号不存在")
+                    return False
+
+                for id in list:
+                    # 创建班级记录
+                    new_class = Class(
+                        teacherid=teacher.teacherid,
+                        classname=classname,
+                        studentid=id
+                    )
+                    session.add(new_class)
+                    session.commit()
+                return True
+            except Exception as inner_e:
+                session.rollback()  # 回滚事务
+                print(f"数据库操作失败: {inner_e}")
+    except Exception as e:
+        print(f"发生错误: {e}")
+        return False
     finally:
         session.close()

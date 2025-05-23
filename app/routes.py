@@ -3,7 +3,7 @@ import re
 import bcrypt
 import json
 import logging
-from typing import Union, Optional
+from typing import Union, Optional, List
 from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, File, UploadFile
@@ -19,7 +19,9 @@ from .offline_TXT_Question import text_response
 from .offline_VL_Get import vl_question
 from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill_download
 from .models import Student, ConversationScore, Teacher, AdministratorMechanism
-from .database import export_studentname_to_excel, engine, create_or_add_class, dissolve_class, delete_member_from_class, join_class, get_class_details, get_frequency, get_studentname, get_teachername
+from .database import (export_studentname_to_excel, engine, create_or_add_class, dissolve_class,
+                       delete_member_from_class, join_class, get_class_details, get_frequency,
+                       get_studentname, get_teachername, add_in_list, add_student_to_class_in_list)
 from .utils import mkdir, encode_image, extract_json_content
 
 router = APIRouter()
@@ -558,6 +560,72 @@ class GetStudentSourceRequest(BaseModel):
     student_identifier: Union[int, str]
     sourcenumber: int
 
+# --- 5-23 教师层 补充教师功能 ---
+# 删除教师
+class DeleteTeacherRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+    Invite: str
+# 教师
+class TeacherIn(BaseModel):
+    teachername: str
+    password: str
+# 教师账号批量导入
+class AddTeacherInListRequest(BaseModel):
+    teacherlist: List[TeacherIn]
+
+# 学生批量导入班级
+class AddStudentToClassInListRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+    classname: str
+    studentidlist: List[int]
+
+# 删除教师
+@router.post("/delete-teacher")
+async def delete_teacher(request: DeleteTeacherRequest):
+    db = SessionLocal()
+    InviteCode = db.query(AdministratorMechanism).filter(AdministratorMechanism.InvitationCode == request.Invite).first()
+    if not InviteCode:
+        raise HTTPException(status_code=400, detail="邀请码错误")
+    # 验证教师权限
+    if isinstance(request.teacher_identifier, int):
+        teacher = db.query(Teacher).get(request.teacher_identifier)
+    else:
+        teacher = db.query(Teacher).filter(Teacher.teachername == request.teacher_identifier).first()
+    if not teacher:
+        raise HTTPException(status_code=400, detail="该教师不存在或未注册")
+    try:
+        db.delete(teacher)
+        db.commit()
+        db.close()
+        return {"status": "success", "message": f"注销教师{teacher.teachername}成功"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+# 批量导入教师
+@router.post("/add-teacher-in-list")
+async def add_teacher_in_list(request: AddTeacherInListRequest):
+    try:
+        result = add_in_list(DATABASE_URL, "Teacher", request.teacherlist)
+        if result:
+            return {"status": "success", "message": "成功批量增加教师账号"}
+        else:
+            return {"status": "fail", "message": "批量增加失败，部分账号可能已加入"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+# 批量导入学生到指定班级
+@router.post("/add-student-to-class-list")
+async def add_student_to_class_list(request: AddStudentToClassInListRequest):
+    try:
+        result = add_student_to_class_in_list(DATABASE_URL, request.teacher_identifier, request.classname, request.studentidlist)
+        if result:
+            return {"status": "success", "message": f"成功批量增加学生到{request.classname}"}
+        else:
+            return {"status": "fail", "message": "批量增加失败"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
 # 创建班级/拉学生进入班级
 @router.post("/teacher-create-class-or-add-class")
 async def teacher_create_class_or_add_class(request: CreateClassRequest):
@@ -721,6 +789,12 @@ class PhotographQueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     response: str
 
+class StudentIn(BaseModel):
+    studentname: str
+    password: str
+class AddStudentInListRequest(BaseModel):
+    studentlist: List[StudentIn]
+
 # 学生主动加入班级
 @router.post("/student-join-class")
 async def student_join_class(request: JoinClassRequest):
@@ -757,3 +831,15 @@ async def student_photograph_question(request: PhotographQueryRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 批量添加学生账号
+@router.post("/add-student-in")
+async def add_student_in(request: AddStudentInListRequest):
+    try:
+        result = add_in_list(DATABASE_URL, "Student", request.studentlist)
+        if result:
+            return {"status": "success", "message": "成功批量增加学生账号"}
+        else:
+            return {"status": "fail", "message": "批量增加失败，部分成员可能已加入"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
