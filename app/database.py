@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Union, Dict, List
 
 import bcrypt
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
@@ -262,6 +262,57 @@ def get_class_details(db_url: str, teacherid: int, classname: str) -> Dict[str, 
             result_template["students"] = [{"id": s.studentid, "name": s.studentname}for s in students]
             return result_template
 
+    except ValueError as ve:
+        print(f"参数错误: {str(ve)}")
+        return result_template
+    except Exception as e:
+        print(f"查询失败: {str(e)}")
+        return result_template
+
+# 获取教师的班级列表
+def get_teacher_teached_classes(db_url: str, teacher_identifier: Union[int, str]) -> Dict[str, Union[str, List[str]]]:
+    # Returns:
+    # {
+    #     "teacher": str,
+    #     "classes": [
+    #         {
+    #         "classname": classname,
+    #         "student_count": student_count
+    #         }
+    #     ],
+    #     "classes_number": int
+    # }
+    result_template = {
+        "teacher": "",
+        "classes": [],
+        "classes_number": 0
+    }
+    try:
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+        with Session() as session:
+            # 验证教师权限
+            if isinstance(teacher_identifier, int):
+                teacher = session.query(Teacher).get(teacher_identifier)
+            else:
+                teacher = session.query(Teacher).filter(Teacher.teachername == teacher_identifier).first()
+            if not teacher:
+                print("教师账号不存在")
+
+            result_template["teacher"] = teacher.teachername
+            # 使用分组查询去重
+            class_records = session.query(Class.classname,func.count(Class.studentid).label('student_count')).filter(Class.teacherid == teacher.teacherid).group_by(Class.teacherid, Class.classname).order_by(Class.classname).all()
+            # 构造返回数据
+            class_list = [
+                {
+                    "classname": record.classname,
+                    "student_count": record.student_count  # 可选字段
+                } for record in class_records if record.classname
+            ]
+
+            result_template["classes"] = class_list
+            result_template["classes_number"] = len(class_list)
+            return result_template
     except ValueError as ve:
         print(f"参数错误: {str(ve)}")
         return result_template

@@ -21,7 +21,8 @@ from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill_download
 from .models import Student, ConversationScore, Teacher, AdministratorMechanism
 from .database import (export_studentname_to_excel, engine, create_or_add_class, dissolve_class,
                        delete_member_from_class, join_class, get_class_details, get_frequency,
-                       get_studentname, get_teachername, add_in_list, add_student_to_class_in_list)
+                       get_studentname, get_teachername, add_in_list, add_student_to_class_in_list,
+                       get_teacher_teached_classes)
 from .utils import mkdir, encode_image, extract_json_content
 
 router = APIRouter()
@@ -108,7 +109,7 @@ async def login(request: LoginRequest):
                             conversation_history[request.username].append(line.strip()[3:])
             else:
                 conversation_history[request.username] = []
-            return {"status": "success", "message": "学生登录成功"}
+            return {"status": "success", "message": "学生登录成功", "studentid": f"{user.studentid}", "studentname": f"{user.studentname}"}
         elif request.userrole == "teacher":
             user = db.query(Teacher).filter(Teacher.teachername == request.username).first()
             if not user:
@@ -119,7 +120,7 @@ async def login(request: LoginRequest):
             # 确保用户文件夹存在
             user_folder = Path(ENVPATH) / request.username
             mkdir(user_folder)
-            return {"status": "success", "message": "教师登录成功"}
+            return {"status": "success", "message": "教师登录成功", "teacherid": f"{user.teacherid}", "teachername": f"{user.teachername}"}
     except Exception as e:
         print(f"在登录时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail="服务器内部错误，请稍后再试")
@@ -549,6 +550,10 @@ class GetClassDetailsRequest(BaseModel):
     teacherid: int
     classname: str
 
+# 教师获取所教授的班级
+class GetTeacherTeacheedClassesRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+
 # 获取学生提问频率
 class GetStudentFrequencyRequest(BaseModel):
     student_identifier: Union[int, str]
@@ -668,6 +673,18 @@ async def teacher_get_class_details(request: GetClassDetailsRequest):
     try:
         result = get_class_details(DATABASE_URL, request.teacherid, request.classname)
         if result["students"]:
+            return {"status": "success", "data": result}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"{str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="服务器内部错误")
+
+# 教师获取教师教授的班级
+@router.post("/teacher-get-teached_classes")
+async def teacher_get_teached_classes(request: GetTeacherTeacheedClassesRequest):
+    try:
+        result = get_teacher_teached_classes(DATABASE_URL, request.teacher_identifier)
+        if result["classes"]:
             return {"status": "success", "data": result}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"{str(ve)}")
