@@ -22,7 +22,7 @@ from .models import Student, ConversationScore, Teacher, AdministratorMechanism
 from .database import (export_studentname_to_excel, engine, create_or_add_class, dissolve_class,
                        delete_member_from_class, join_class, get_class_details, get_frequency,
                        get_studentname, get_teachername, add_in_list, add_student_to_class_in_list,
-                       get_teacher_teached_classes)
+                       get_teacher_teached_classes, rename_classname)
 from .utils import mkdir, encode_image, extract_json_content
 
 router = APIRouter()
@@ -534,6 +534,12 @@ class CreateClassRequest(BaseModel):
     student_identifier: Union[int, str]
     classname: str
 
+# 重命名班级
+class RenameClassRequest(BaseModel):
+    teacherid: int
+    old_classname: str
+    new_classname: str
+
 # 解散班级
 class DissolveClassRequest(BaseModel):
     teacherid: int
@@ -633,15 +639,27 @@ async def add_student_to_class_list(request: AddStudentToClassInListRequest):
 
 # 创建班级/拉学生进入班级
 @router.post("/teacher-create-class-or-add-class")
-async def teacher_create_class_or_add_class(request: CreateClassRequest):
+async def teacher_create_class_or_add_class(request: RenameClassRequest):
     try:
         result = create_or_add_class(DATABASE_URL, request.teacherid, request.student_identifier, request.classname)
         if result:
-            return {"status": "success", "message": f"{request.classname}: 添加一名学生"}
+            return {"status": "success", "message": f"{request.old_classname}: 修改班级名称为{request.new_classname}成功"}
         elif not result:
-            return {"status": "fail", "message": f"{request.classname}: 创建失败或添加学生失败"}
+            return {"status": "fail", "message": f"{request.old_classname}: "}
     except Exception as e:
         raise HTTPException(status_code=500, detail="函数逻辑错误或网络问题: {str(e)}")
+
+# 修改班级名称
+@router.post("/teacher-rename-class")
+async def teacher_rename_class(request: RenameClassRequest):
+    try:
+        result = rename_classname(DATABASE_URL, request.teacherid, request.old_classname, request.new_classname)
+        if result:
+            return {"status": "success", "message": f"{request.old_classname}: 成功将名称修改为{request.new_classname}"}
+        elif not result:
+            return {"status": "fail", "message": f"{request.old_classname}: 创建失败或添加学生失败"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"函数逻辑错误或网络问题: {str(e)}")
 
 # 解散班级
 @router.post("/teacher-dissolve-class")

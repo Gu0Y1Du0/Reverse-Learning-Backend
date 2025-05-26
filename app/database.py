@@ -129,6 +129,47 @@ def create_or_add_class(db_url: str, teacherid: int, student_identifier: Union[i
         print(f"操作失败: {str(e)}")
         return False
 
+# 修改班级名
+def rename_classname(db_url: str, teacherid: int, old_classname: str, new_classname: str) -> bool:
+    try:
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+        # 输入验证
+        if not isinstance(teacherid, int) or teacherid <= 0:
+            raise ValueError("教师ID必须为正整数")
+        if not old_classname.strip() or not new_classname.strip():
+            raise ValueError("班级名称不能为空")
+        if old_classname == new_classname:
+            raise ValueError("新旧班级名称不能相同")
+        with Session() as session:
+            try:
+                # 检查新名称是否已存在
+                existing = session.query(Class).filter(Class.teacherid == teacherid, Class.classname == new_classname).first()
+                if existing:
+                    print(f"班级名称 {new_classname} 已存在")
+                    return False
+                # 执行更新操作
+                updated_count = session.query(Class).filter(Class.teacherid == teacherid, Class.classname == old_classname).update({"classname": new_classname},synchronize_session='fetch')
+
+                session.commit()
+
+                if updated_count > 0:
+                    print(f"成功将 [{old_classname}] 重命名为 [{new_classname}]，影响 {updated_count} 条记录")
+                    return True
+                else:
+                    print(f"教师 {teacherid} 未创建班级 {old_classname}")
+                    return False
+            except Exception as inner_e:
+                session.rollback()
+                print(f"数据库操作失败: {inner_e}")
+                return False
+    except ValueError as ve:
+        print(f"参数错误: {ve}")
+        return False
+    except Exception as e:
+        print(f"系统异常: {e}")
+        return False
+
 # 解散班级
 def dissolve_class(db_url: str, teacherid: int, classname: str) -> bool:
     try:
@@ -269,7 +310,7 @@ def get_class_details(db_url: str, teacherid: int, classname: str) -> Dict[str, 
         print(f"查询失败: {str(e)}")
         return result_template
 
-# 获取教师的班级列表
+# 获取教师所教授的班级列表
 def get_teacher_teached_classes(db_url: str, teacher_identifier: Union[int, str]) -> Dict[str, Union[str, List[str]]]:
     # Returns:
     # {
