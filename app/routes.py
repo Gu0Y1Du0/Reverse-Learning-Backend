@@ -639,13 +639,13 @@ async def add_student_to_class_list(request: AddStudentToClassInListRequest):
 
 # 创建班级/拉学生进入班级
 @router.post("/teacher-create-class-or-add-class")
-async def teacher_create_class_or_add_class(request: RenameClassRequest):
+async def teacher_create_class_or_add_class(request: CreateClassRequest):
     try:
         result = create_or_add_class(DATABASE_URL, request.teacherid, request.student_identifier, request.classname)
         if result:
-            return {"status": "success", "message": f"{request.old_classname}: 修改班级名称为{request.new_classname}成功"}
+            return {"status": "success", "message": f"{request.classname}: 添加一名学生成功"}
         elif not result:
-            return {"status": "fail", "message": f"{request.old_classname}: "}
+            return {"status": "fail", "message": f"{request.classname}: 添加学生失败，请检查输入内容正确性或是否已加入"}
     except Exception as e:
         raise HTTPException(status_code=500, detail="函数逻辑错误或网络问题: {str(e)}")
 
@@ -681,7 +681,7 @@ async def teacher_delete_member_from_class(request: DeleteMemberFromClassRequest
         if result:
             return {"status": "success", "message": f"{request.classname}: 已移出该学生"}
         elif not result:
-            return {"status": "fail", "message": f"{request.classname}: 解散失败"}
+            return {"status": "fail", "message": f"{request.classname}: 移出该成员失败"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"函数逻辑错误或网络问题: {str(e)}")
 
@@ -704,6 +704,8 @@ async def teacher_get_teached_classes(request: GetTeacherTeacheedClassesRequest)
         result = get_teacher_teached_classes(DATABASE_URL, request.teacher_identifier)
         if result["classes"]:
             return {"status": "success", "data": result}
+        else:
+            raise HTTPException(status_code=400, detail=f"获取列表失败！教师未教授班级，或教师加入或教师信息填写错误。")
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"{str(ve)}")
     except Exception as e:
@@ -786,7 +788,7 @@ async def teacher_upload_file(teacher_identifier: Union[int, str], target_is_stu
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
-        return {"status": "success", "filename": f"{file.filename}"}
+        return {"status": "success", "filename": f"{file.filename}上传成功"}
     except HTTPException as he:
         raise he
     except Exception as e:
