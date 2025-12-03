@@ -3,7 +3,7 @@ import re
 import bcrypt
 import json
 import logging
-from typing import Union, Optional
+from typing import Union, Optional, List
 from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, File, UploadFile
@@ -19,7 +19,10 @@ from .offline_TXT_Question import text_response
 from .offline_VL_Get import vl_question
 from .services import call_qwen, call_qwen_vl, call_deepseek_r1_distill_download
 from .models import Student, ConversationScore, Teacher, AdministratorMechanism
-from .database import export_studentname_to_excel, engine, create_or_add_class, dissolve_class, delete_member_from_class, join_class, get_class_details, get_frequency, get_studentname, get_teachername
+from .database import (export_studentname_to_excel, engine, create_or_add_class, dissolve_class,
+                       delete_member_from_class, join_class, get_class_details, get_frequency,
+                       get_studentname, get_teachername, add_in_list, add_student_to_class_in_list,
+                       get_teacher_teached_classes, rename_classname)
 from .utils import mkdir, encode_image, extract_json_content
 
 router = APIRouter()
@@ -53,21 +56,21 @@ class ChangePasswordRequest(BaseModel):
 
 # 多轮对话请求模型
 class ChatRequest(BaseModel):
-    studentname: str  # 用户名，用于区分用户会话
+    username: str  # 用户名，用于区分用户会话
     prompt: str    # 用户输入的问题
 
 class ViewRequest(BaseModel):
-    studentname: str
+    username: str
     file: str   # 图片的Base64格式
 
 # 学习建议模型
 class AdviceRequest(BaseModel):
-    studentname: str
+    username: str
     prompt: str
 
 # 资源下载模型
 class GetsourceRequest(BaseModel):
-    studentname: str
+    username: str
     sourcenumber: int
 
 # 存储用户对话历史（简单实现，使用内存中的字典）
@@ -106,7 +109,7 @@ async def login(request: LoginRequest):
                             conversation_history[request.username].append(line.strip()[3:])
             else:
                 conversation_history[request.username] = []
-            return {"status": "success", "message": "学生登录成功"}
+            return {"status": "success", "message": "学生登录成功", "studentid": f"{user.studentid}", "studentname": f"{user.studentname}"}
         elif request.userrole == "teacher":
             user = db.query(Teacher).filter(Teacher.teachername == request.username).first()
             if not user:
@@ -117,7 +120,7 @@ async def login(request: LoginRequest):
             # 确保用户文件夹存在
             user_folder = Path(ENVPATH) / request.username
             mkdir(user_folder)
-            return {"status": "success", "message": "教师登录成功"}
+            return {"status": "success", "message": "教师登录成功", "teacherid": f"{user.teacherid}", "teachername": f"{user.teachername}"}
     except Exception as e:
         print(f"在登录时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail="服务器内部错误，请稍后再试")
@@ -213,7 +216,7 @@ async def qwenchat(request: ChatRequest):
         # 定义 Preprompt
         Preprompt = (
             "你是一个侧重逆向学习的教育助手，负责分析用户的对话内容，有逻辑地引导学生正向积极地学习。"
-            "请按照以下 JSON 格式返回结果："
+            "请按照以下 JSON 格式返回结果，不必添加多余内容："
             "{"
             '    "用户画像": {'
             '        "学段": "小学/初中/高中/大学",'
@@ -236,7 +239,7 @@ async def qwenchat(request: ChatRequest):
             "情感参与度(分数占比25％)：基于用户对话中的情感词汇密度。"
         )
         # 获取用户印记 建立数据库连接
-        username = request.studentname
+        username = request.username
         prompt = request.prompt
         # 确保初始化数据存储
         if username not in conversation_history:
@@ -361,20 +364,20 @@ async def get_evaluation(studentname: str):
 async def qwenview(request: ViewRequest):
     logging.info(f"Received request: {request}")
     try:
-        username = request.studentname
-        if not request.studentname:
+        username = request.username
+        if not request.username:
             raise HTTPException(status_code=400, detail="Username is required.")
         file = request.file
         # 检查文件类型是否为图片
         if not file.startswith("data:image/"):
             return JSONResponse(status_code=400, content={"message": "只支持图片文件！"})
         prompt = (
-            "请按照以下 JSON 格式返回结果，不要使用markdown格式，需保证转化为JSON后数学符号、换行符号不影响或干扰包解析："
+            "请严格按照以下 JSON 格式返回结果而不要有多余内容，需保证转化为JSON后数学符号、换行符号不影响或干扰包解析："
             "{"
             '    "题目": "识别到的完整题目，如果是选择题，需要加入选项",'
             '    "正确答案": {'
+            '        "考察知识点": ["知识点1", "知识点2"],'
             '        "详细解析": "详细的解答过程",'
-            '        "考察知识点": ["知识点1", "知识点2"]'
             "    }"
             "}"
         )
@@ -457,7 +460,7 @@ async def qwenview(request: ViewRequest):
 # --- Student业务 ---    资源下载
 @router.post("/student-get-source")
 async def student_get_source(request: GetsourceRequest):
-    username = request.studentname
+    username = request.username
     sourcenumber = request.sourcenumber
     user_folder = Path(ENVPATH) / username
     try:
@@ -531,6 +534,12 @@ class CreateClassRequest(BaseModel):
     student_identifier: Union[int, str]
     classname: str
 
+# 重命名班级
+class RenameClassRequest(BaseModel):
+    teacherid: int
+    old_classname: str
+    new_classname: str
+
 # 解散班级
 class DissolveClassRequest(BaseModel):
     teacherid: int
@@ -547,6 +556,10 @@ class GetClassDetailsRequest(BaseModel):
     teacherid: int
     classname: str
 
+# 教师获取所教授的班级
+class GetTeacherTeacheedClassesRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+
 # 获取学生提问频率
 class GetStudentFrequencyRequest(BaseModel):
     student_identifier: Union[int, str]
@@ -558,17 +571,95 @@ class GetStudentSourceRequest(BaseModel):
     student_identifier: Union[int, str]
     sourcenumber: int
 
+# --- 5-23 教师层 补充教师功能 ---
+# 删除教师
+class DeleteTeacherRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+    Invite: str
+# 教师
+class TeacherIn(BaseModel):
+    teachername: str
+    password: str
+# 教师账号批量导入
+class AddTeacherInListRequest(BaseModel):
+    teacherlist: List[TeacherIn]
+
+# 学生批量导入班级
+class AddStudentToClassInListRequest(BaseModel):
+    teacher_identifier: Union[int, str]
+    classname: str
+    studentidlist: List[int]
+
+# 删除教师
+@router.post("/delete-teacher")
+async def delete_teacher(request: DeleteTeacherRequest):
+    db = SessionLocal()
+    InviteCode = db.query(AdministratorMechanism).filter(AdministratorMechanism.InvitationCode == request.Invite).first()
+    if not InviteCode:
+        raise HTTPException(status_code=400, detail="邀请码错误")
+    # 验证教师权限
+    if isinstance(request.teacher_identifier, int):
+        teacher = db.query(Teacher).get(request.teacher_identifier)
+    else:
+        teacher = db.query(Teacher).filter(Teacher.teachername == request.teacher_identifier).first()
+    if not teacher:
+        raise HTTPException(status_code=400, detail="该教师不存在或未注册")
+    try:
+        db.delete(teacher)
+        db.commit()
+        db.close()
+        return {"status": "success", "message": f"注销教师{teacher.teachername}成功"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+# 批量导入教师
+@router.post("/add-teacher-in-list")
+async def add_teacher_in_list(request: AddTeacherInListRequest):
+    try:
+        result = add_in_list(DATABASE_URL, "Teacher", request.teacherlist)
+        if result:
+            return {"status": "success", "message": "成功批量增加教师账号"}
+        else:
+            return {"status": "fail", "message": "批量增加失败，部分账号可能已加入"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+# 批量导入学生到指定班级
+@router.post("/add-student-to-class-list")
+async def add_student_to_class_list(request: AddStudentToClassInListRequest):
+    try:
+        result = add_student_to_class_in_list(DATABASE_URL, request.teacher_identifier, request.classname, request.studentidlist)
+        if result:
+            return {"status": "success", "message": f"成功批量增加学生到{request.classname}"}
+        else:
+            return {"status": "fail", "message": "批量增加失败"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
 # 创建班级/拉学生进入班级
 @router.post("/teacher-create-class-or-add-class")
 async def teacher_create_class_or_add_class(request: CreateClassRequest):
     try:
         result = create_or_add_class(DATABASE_URL, request.teacherid, request.student_identifier, request.classname)
         if result:
-            return {"status": "success", "message": f"{request.classname}: 添加一名学生"}
+            return {"status": "success", "message": f"{request.classname}: 添加一名学生成功"}
         elif not result:
-            return {"status": "fail", "message": f"{request.classname}: 创建失败或添加学生失败"}
+            return {"status": "fail", "message": f"{request.classname}: 添加学生失败，请检查输入内容正确性或是否已加入"}
     except Exception as e:
         raise HTTPException(status_code=500, detail="函数逻辑错误或网络问题: {str(e)}")
+
+# 修改班级名称
+@router.post("/teacher-rename-class")
+async def teacher_rename_class(request: RenameClassRequest):
+    try:
+        result = rename_classname(DATABASE_URL, request.teacherid, request.old_classname, request.new_classname)
+        if result:
+            return {"status": "success", "message": f"{request.old_classname}: 成功将名称修改为{request.new_classname}"}
+        elif not result:
+            return {"status": "fail", "message": f"{request.old_classname}: 创建失败或添加学生失败"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"函数逻辑错误或网络问题: {str(e)}")
 
 # 解散班级
 @router.post("/teacher-dissolve-class")
@@ -590,7 +681,7 @@ async def teacher_delete_member_from_class(request: DeleteMemberFromClassRequest
         if result:
             return {"status": "success", "message": f"{request.classname}: 已移出该学生"}
         elif not result:
-            return {"status": "fail", "message": f"{request.classname}: 解散失败"}
+            return {"status": "fail", "message": f"{request.classname}: 移出该成员失败"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"函数逻辑错误或网络问题: {str(e)}")
 
@@ -601,6 +692,20 @@ async def teacher_get_class_details(request: GetClassDetailsRequest):
         result = get_class_details(DATABASE_URL, request.teacherid, request.classname)
         if result["students"]:
             return {"status": "success", "data": result}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"{str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="服务器内部错误")
+
+# 教师获取教师教授的班级
+@router.post("/teacher-get-teached_classes")
+async def teacher_get_teached_classes(request: GetTeacherTeacheedClassesRequest):
+    try:
+        result = get_teacher_teached_classes(DATABASE_URL, request.teacher_identifier)
+        if result["classes"]:
+            return {"status": "success", "data": result}
+        else:
+            raise HTTPException(status_code=400, detail=f"获取列表失败！教师未教授班级，或教师加入或教师信息填写错误。")
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"{str(ve)}")
     except Exception as e:
@@ -683,7 +788,7 @@ async def teacher_upload_file(teacher_identifier: Union[int, str], target_is_stu
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
-        return {"status": "success", "filename": f"{file.filename}"}
+        return {"status": "success", "filename": f"{file.filename}上传成功"}
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -721,6 +826,12 @@ class PhotographQueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     response: str
 
+class StudentIn(BaseModel):
+    studentname: str
+    password: str
+class AddStudentInListRequest(BaseModel):
+    studentlist: List[StudentIn]
+
 # 学生主动加入班级
 @router.post("/student-join-class")
 async def student_join_class(request: JoinClassRequest):
@@ -757,3 +868,15 @@ async def student_photograph_question(request: PhotographQueryRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 批量添加学生账号
+@router.post("/add-student-in")
+async def add_student_in(request: AddStudentInListRequest):
+    try:
+        result = add_in_list(DATABASE_URL, "Student", request.studentlist)
+        if result:
+            return {"status": "success", "message": "成功批量增加学生账号"}
+        else:
+            return {"status": "fail", "message": "批量增加失败，部分成员可能已加入"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")

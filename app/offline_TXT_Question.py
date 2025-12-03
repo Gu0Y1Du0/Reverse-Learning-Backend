@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from app.config import Qwen2_5_Math_1_5B_Instruct_bnb_4bit_dir
+from app.config import Qwen2_5_Math_1_5B_Instruct_bnb_4bit_dir, Qwen2_5_Math_1_5B_Instruct_quantized_dir
 
 # --- 模型与分词器加载 ---
 model_name_or_path = Qwen2_5_Math_1_5B_Instruct_bnb_4bit_dir

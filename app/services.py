@@ -50,7 +50,7 @@ def call_qwen_vl(image_path: str, prompt: str, imageform: str):
     }
     # 构造请求体
     payload = {
-        "model": "qwen2.5-vl-32b-instruct",  # 指定模型名称
+        "model": "qwen2.5-vl-72b-instruct",  # 指定模型名称
         "messages": [
             {"role": "system", "content": [{"type": "text", "text": "根据要求做出应答，保证格式正确"}], },
             {
