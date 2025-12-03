@@ -1,3 +1,17 @@
-/test9/
-/Model_dir/
-/testteacher/
+# Editor directories and files
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.pyc
+
+.vs
+.env
+
+__pycache__/
+test*/
+Model_dir/
+testteacher/

@@ -56,21 +56,21 @@ class ChangePasswordRequest(BaseModel):
 
 # 多轮对话请求模型
 class ChatRequest(BaseModel):
-    studentname: str  # 用户名，用于区分用户会话
+    username: str  # 用户名，用于区分用户会话
     prompt: str    # 用户输入的问题
 
 class ViewRequest(BaseModel):
-    studentname: str
+    username: str
     file: str   # 图片的Base64格式
 
 # 学习建议模型
 class AdviceRequest(BaseModel):
-    studentname: str
+    username: str
     prompt: str
 
 # 资源下载模型
 class GetsourceRequest(BaseModel):
-    studentname: str
+    username: str
     sourcenumber: int
 
 # 存储用户对话历史（简单实现，使用内存中的字典）
@@ -216,7 +216,7 @@ async def qwenchat(request: ChatRequest):
         # 定义 Preprompt
         Preprompt = (
             "你是一个侧重逆向学习的教育助手，负责分析用户的对话内容，有逻辑地引导学生正向积极地学习。"
-            "请按照以下 JSON 格式返回结果："
+            "请按照以下 JSON 格式返回结果，不必添加多余内容："
             "{"
             '    "用户画像": {'
             '        "学段": "小学/初中/高中/大学",'
@@ -239,7 +239,7 @@ async def qwenchat(request: ChatRequest):
             "情感参与度(分数占比25％)：基于用户对话中的情感词汇密度。"
         )
         # 获取用户印记 建立数据库连接
-        username = request.studentname
+        username = request.username
         prompt = request.prompt
         # 确保初始化数据存储
         if username not in conversation_history:
@@ -364,20 +364,20 @@ async def get_evaluation(studentname: str):
 async def qwenview(request: ViewRequest):
     logging.info(f"Received request: {request}")
     try:
-        username = request.studentname
-        if not request.studentname:
+        username = request.username
+        if not request.username:
             raise HTTPException(status_code=400, detail="Username is required.")
         file = request.file
         # 检查文件类型是否为图片
         if not file.startswith("data:image/"):
             return JSONResponse(status_code=400, content={"message": "只支持图片文件！"})
         prompt = (
-            "请按照以下 JSON 格式返回结果，不要使用markdown格式，需保证转化为JSON后数学符号、换行符号不影响或干扰包解析："
+            "请严格按照以下 JSON 格式返回结果而不要有多余内容，需保证转化为JSON后数学符号、换行符号不影响或干扰包解析："
             "{"
             '    "题目": "识别到的完整题目，如果是选择题，需要加入选项",'
             '    "正确答案": {'
+            '        "考察知识点": ["知识点1", "知识点2"],'
             '        "详细解析": "详细的解答过程",'
-            '        "考察知识点": ["知识点1", "知识点2"]'
             "    }"
             "}"
         )
@@ -460,7 +460,7 @@ async def qwenview(request: ViewRequest):
 # --- Student业务 ---    资源下载
 @router.post("/student-get-source")
 async def student_get_source(request: GetsourceRequest):
-    username = request.studentname
+    username = request.username
     sourcenumber = request.sourcenumber
     user_folder = Path(ENVPATH) / username
     try:

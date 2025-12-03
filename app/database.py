@@ -21,7 +21,7 @@ def export_studentname_to_excel(db_url, studentname, excel_file):
         session = Session()
 
         # 查询指定username的行
-        results = session.query(ConversationScore).filter_by(stundentrname=studentname).all()
+        results = session.query(ConversationScore).filter_by(studentname=studentname).all()
 
         if not results:
             print(f"未找到与用户名 '{studentname}' 相关的数据。")
@@ -30,7 +30,7 @@ def export_studentname_to_excel(db_url, studentname, excel_file):
         # 将查询结果转换为字典列表
         data = [
             {
-                "ID": row.studentid,
+                "ID": row.id,
                 "用户名": row.studentname,
                 "时间戳": row.timestamp,
                 "问题深度": row.question_depth,
